@@ -2,7 +2,7 @@ import EventBus from '../core/EventBus.js';
 
 /**
  * Manages camera modes and delegates updates to the active mode.
- * Press C to cycle between registered modes.
+ * Press C to cycle between registered modes (filtered by allowed list).
  */
 class CameraSystem {
   constructor(camera, inputManager) {
@@ -12,6 +12,13 @@ class CameraSystem {
     this._modeNames = [];
     this._activeIndex = -1;
     this._activeMode = null;
+
+    /**
+     * When set, C key only cycles through these mode names.
+     * null = all modes allowed (director mode).
+     * @type {string[]|null}
+     */
+    this._allowedModes = null;
 
     // C key to cycle modes (edge-detected via keydown event)
     this._onKeyDown = (e) => {
@@ -23,6 +30,14 @@ class CameraSystem {
   registerMode(mode) {
     this._modes.set(mode.name, mode);
     this._modeNames.push(mode.name);
+  }
+
+  /**
+   * Restrict which camera modes can be cycled with C key.
+   * @param {string[]|null} names — array of allowed mode names, or null for all
+   */
+  setAllowedModes(names) {
+    this._allowedModes = names;
   }
 
   setMode(name) {
@@ -42,8 +57,19 @@ class CameraSystem {
 
   cycleMode() {
     if (this._modeNames.length === 0) return;
-    const nextIndex = (this._activeIndex + 1) % this._modeNames.length;
-    this.setMode(this._modeNames[nextIndex]);
+
+    // Build the list of cyclable modes
+    const cyclable = this._allowedModes
+      ? this._modeNames.filter((n) => this._allowedModes.includes(n))
+      : this._modeNames;
+
+    if (cyclable.length === 0) return;
+
+    // Find current position in the cyclable list
+    const currentName = this._activeMode ? this._activeMode.name : null;
+    const currentIdx = cyclable.indexOf(currentName);
+    const nextIdx = (currentIdx + 1) % cyclable.length;
+    this.setMode(cyclable[nextIdx]);
   }
 
   getActiveModeName() {

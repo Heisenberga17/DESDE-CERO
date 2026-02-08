@@ -1,7 +1,7 @@
 import { Vector3 } from 'three';
 import EventBus from '../core/EventBus.js';
 import GameState from '../core/GameState.js';
-import { VEHICLE_ENTER_DISTANCE } from '../utils/constants.js';
+import { VEHICLE_ENTER_DISTANCE, GP_Y } from '../utils/constants.js';
 
 /**
  * Manages proximity-based enter / exit interaction between the player and
@@ -94,9 +94,9 @@ class VehicleInteraction {
    * @param {number} delta — Frame time in seconds
    */
   update(delta) {
-    // F key edge detection
+    // F key edge detection (keyboard or gamepad Y button)
     const fDown = this._input.isKeyDown('KeyF');
-    const fJustPressed = fDown && !this._fPressed;
+    const fJustPressed = (fDown && !this._fPressed) || this._input.isButtonJustPressed(GP_Y);
     this._fPressed = fDown;
 
     if (this._mode === 'play') {

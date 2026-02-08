@@ -79,7 +79,8 @@ class HUD {
    */
   _updateCameraLabel(cameraName) {
     if (this._modeEl) {
-      this._modeEl.textContent = cameraName.toUpperCase();
+      const mode = GameState.mode.toUpperCase();
+      this._modeEl.textContent = `${mode} / ${cameraName.toUpperCase()}`;
     }
   }
 

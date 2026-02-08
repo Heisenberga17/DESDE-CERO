@@ -80,6 +80,9 @@ class Engine {
     const delta = this._clock.getDelta();
     if (this._stats) this._stats.begin();
 
+    // Poll gamepad each frame (before subsystems read it)
+    this.input.pollGamepad();
+
     for (const system of this._updateables) {
       system.update(delta);
     }

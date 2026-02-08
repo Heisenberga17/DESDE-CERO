@@ -8,17 +8,17 @@ import GameState from './GameState.js';
  * Valid modes: 'free', 'play', 'drive', 'director'
  */
 
-const MODE_CAMERA_MAP = {
-  free:     'drone',
-  play:     'thirdperson',
-  drive:    'driving',
-  // director — camera is managed by DirectorMode, not mapped here
+const MODE_CONFIG = {
+  free:     { defaultCam: 'drone',       allowedCams: ['drone', 'orbit', 'cinematic', 'path'] },
+  play:     { defaultCam: 'thirdperson', allowedCams: ['thirdperson', 'orbit', 'drone'] },
+  drive:    { defaultCam: 'driving',     allowedCams: ['driving', 'orbit', 'drone'] },
+  director: { defaultCam: 'drone',       allowedCams: null }, // all cameras
 };
 
 class ModeController {
   /**
    * @param {object} params
-   * @param {object} params.cameraSystem    — has .setMode(name), .getActiveModeName()
+   * @param {object} params.cameraSystem    — has .setMode(name), .setAllowedModes(names), .getActiveModeName()
    * @param {object|null} params.playerController — has .update(delta), .position, .body; may be null
    * @param {object|null} params.vehicleInteraction — has .update(delta); may be null
    * @param {object} params.director        — DirectorMode with .update(delta), .active, .toggle(), .activate(), .deactivate()
@@ -31,9 +31,10 @@ class ModeController {
 
     // React to mode changes for camera switching and subsystem notification
     EventBus.on('gamestate:modeChanged', ({ mode }) => {
-      const cameraMode = MODE_CAMERA_MAP[mode];
-      if (cameraMode) {
-        this.cameraSystem.setMode(cameraMode);
+      const config = MODE_CONFIG[mode];
+      if (config) {
+        this.cameraSystem.setAllowedModes(config.allowedCams);
+        this.cameraSystem.setMode(config.defaultCam);
       }
       // Notify VehicleInteraction of mode changes
       if (this.vehicleInteraction) {

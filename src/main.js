@@ -42,6 +42,9 @@ import ModelLoader from './loaders/ModelLoader.js';
 import ModelBrowser from './ui/ModelBrowser.js';
 import HUD from './ui/HUD.js';
 
+// Physics
+import CollisionWorld from './physics/CollisionWorld.js';
+
 // Utils
 import { createStats } from './utils/debug.js';
 
@@ -62,7 +65,8 @@ const cameraSystem = new CameraSystem(engine.camera, engine.input);
 // Register camera modes
 cameraSystem.registerMode(new CameraDrone());
 cameraSystem.registerMode(new DrivingCam());
-cameraSystem.registerMode(new OrbitCam());
+const orbitCam = new OrbitCam();
+cameraSystem.registerMode(orbitCam);
 cameraSystem.registerMode(new CinematicCam());
 cameraSystem.registerMode(new PathCam());
 cameraSystem.setMode('drone');
@@ -145,6 +149,10 @@ async function loadAssets() {
     const city = await ModelLoader.load('assets/models/city/low_poly_city_game-ready.glb');
     city.scene.name = 'city-environment';
     engine.scene.add(city.scene);
+
+    // Build collision octree from city geometry
+    CollisionWorld.build(city.scene);
+
     setStatus('City loaded');
 
     // Load vehicles in parallel
@@ -209,6 +217,24 @@ async function loadAssets() {
     // Wire into ModeController
     modeController.setPlayerController(playerController);
     modeController.setVehicleInteraction(vehicleInteraction);
+
+    // Wire OrbitCam to follow the player/vehicle based on mode
+    EventBus.on('gamestate:modeChanged', ({ mode }) => {
+      if (mode === 'play') {
+        orbitCam.setFollowTarget(body.container, 1.5);
+      } else if (mode === 'drive' && GameState.vehicle) {
+        orbitCam.setFollowTarget(GameState.vehicle.mesh, 1.0);
+      } else {
+        orbitCam.setFollowTarget(null);
+      }
+    });
+    // Also update follow target when entering/exiting vehicles
+    EventBus.on('vehicle:entered', ({ vehicle }) => {
+      orbitCam.setFollowTarget(vehicle.mesh, 1.0);
+    });
+    EventBus.on('vehicle:exited', () => {
+      orbitCam.setFollowTarget(body.container, 1.5);
+    });
 
     setStatus('All assets loaded! Press P to play');
     console.log('[Assets] All loaded — city, 3 vehicles, avatar, animations');
