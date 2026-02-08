@@ -1,6 +1,7 @@
 import { AnimationClip } from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import EventBus from '../core/EventBus.js';
+import MixamoRetargeter from './MixamoRetargeter.js';
 
 /**
  * Central animation clip registry.
@@ -87,6 +88,77 @@ class AnimationManager {
     const err = new Error(`No animations found in ${url}`);
     EventBus.emit('animation:error', { name, error: err });
     throw err;
+  }
+
+  /**
+   * Load an animation clip from an FBX file (Mixamo format) and
+   * auto-retarget it for use with a non-Mixamo skeleton.
+   *
+   * @param {string} name            -- Unique key for the clip
+   * @param {string} url             -- Path or URL to the .fbx file
+   * @param {THREE.Skeleton|null} targetSkeleton
+   * @returns {Promise<THREE.AnimationClip>}
+   */
+  async loadMixamoClip(name, url, targetSkeleton = null) {
+    if (this._clips.has(name)) return this._clips.get(name);
+
+    return new Promise((resolve, reject) => {
+      this._fbxLoader.load(
+        url,
+        (fbx) => {
+          if (!fbx.animations || fbx.animations.length === 0) {
+            const err = new Error(`No animations found in ${url}`);
+            EventBus.emit('animation:error', { name, error: err });
+            reject(err);
+            return;
+          }
+
+          let clip = fbx.animations[0];
+          clip = MixamoRetargeter.retargetAndClean(clip);
+          clip.name = name;
+          this._clips.set(name, clip);
+          console.log(`[AnimationManager] Mixamo clip '${name}' loaded and retargeted`);
+          EventBus.emit('animation:loaded', { name, clip });
+          resolve(clip);
+        },
+        undefined,
+        (error) => {
+          EventBus.emit('animation:error', { name, error });
+          reject(error);
+        }
+      );
+    });
+  }
+
+  /**
+   * Try to load a set of standard animation clips if they exist.
+   *
+   * @param {string} basePath -- Directory containing the .fbx files
+   * @returns {Promise<Array<{name:string, clip?:THREE.AnimationClip, ok:boolean}>>}
+   */
+  async preloadDefaultClips(basePath = 'assets/animations/') {
+    const defaults = [
+      ['idle', 'Idle.fbx'],
+      ['walk', 'Walking.fbx'],
+      ['run', 'Running.fbx'],
+      ['sprint', 'Sprinting.fbx'],
+      ['jump', 'Jump.fbx'],
+      ['fall', 'Falling.fbx'],
+      ['dance', 'Dancing.fbx'],
+      ['wave', 'Waving.fbx'],
+    ];
+
+    const results = [];
+    for (const [name, file] of defaults) {
+      try {
+        const clip = await this.loadMixamoClip(name, basePath + file);
+        results.push({ name, clip, ok: true });
+      } catch (e) {
+        console.warn(`[AnimationManager] Optional clip '${name}' not found: ${e.message}`);
+        results.push({ name, ok: false });
+      }
+    }
+    return results;
   }
 
   /**

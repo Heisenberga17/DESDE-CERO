@@ -1,4 +1,6 @@
 import { Group, AnimationMixer, LoopRepeat, LoopOnce } from 'three';
+import AnimationState from '../animation/AnimationState.js';
+import AnimationManager from '../animation/AnimationManager.js';
 
 /**
  * Character body wrapper that holds a loaded GLB mesh and manages animations.
@@ -51,6 +53,9 @@ class CharacterBody {
     /** Currently playing action (or null) */
     this.currentAction = null;
 
+    /** Animation state machine for automatic speed-based blending */
+    this.animState = new AnimationState(this.mixer);
+
     /**
      * Approximate character height (meters).
      * Used by the camera to compute the look-at offset above feet.
@@ -93,6 +98,87 @@ class CharacterBody {
     }
 
     this.currentAction = next;
+  }
+
+  /**
+   * Register all available clips from AnimationManager into the state machine.
+   */
+  registerAnimations() {
+    const defaultClips = ['idle', 'walk', 'run', 'sprint', 'jump', 'fall', 'dance', 'wave'];
+    for (const name of defaultClips) {
+      const clip = AnimationManager.getClip(name);
+      if (clip) {
+        this.animState.registerAction(name, clip);
+      }
+    }
+    // Also register any clips already in this.actions
+    for (const [name, action] of Object.entries(this.actions)) {
+      if (!this.animState.hasAction(name)) {
+        this.animState.registerAction(name, action.getClip());
+      }
+    }
+    // Auto-start idle if available
+    if (this.animState.hasAction('idle')) {
+      this.animState.setState('idle');
+    }
+  }
+
+  /**
+   * Delegates animation selection to the state machine based on speed.
+   * @param {number} speed
+   */
+  setAnimBySpeed(speed) {
+    this.animState.setStateBySpeed(speed);
+  }
+
+  /**
+   * Hot-swap the avatar mesh at runtime.
+   * @param {THREE.Object3D} newMesh
+   * @param {THREE.AnimationClip[]} newAnimations
+   */
+  async swapMesh(newMesh, newAnimations = []) {
+    // Stop current animations
+    this.mixer.stopAllAction();
+    this.mixer.uncacheRoot(this.mesh);
+
+    // Remove old mesh from container
+    this.container.remove(this.mesh);
+
+    // Dispose old mesh GPU resources
+    this.mesh.traverse((child) => {
+      if (child.isMesh) {
+        child.geometry?.dispose();
+        const materials = Array.isArray(child.material) ? child.material : [child.material];
+        for (const mat of materials) mat.dispose();
+      }
+    });
+
+    // Set new mesh
+    this.mesh = newMesh;
+    this.mesh.name = 'player-character';
+    this.container.add(this.mesh);
+
+    // Enable shadows
+    this.mesh.traverse((child) => {
+      if (child.isMesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+
+    // Rebuild mixer and actions
+    this.mixer = new AnimationMixer(this.mesh);
+    this.animState = new AnimationState(this.mixer);
+    this.actions = {};
+    this.currentAction = null;
+
+    for (const clip of newAnimations) {
+      const action = this.mixer.clipAction(clip);
+      this.actions[clip.name] = action;
+    }
+
+    // Re-register from AnimationManager
+    this.registerAnimations();
   }
 
   /**

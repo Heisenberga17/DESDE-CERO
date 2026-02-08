@@ -1,6 +1,5 @@
 import { Vector3 } from 'three';
 import EventBus from '../core/EventBus.js';
-import GameState from '../core/GameState.js';
 import {
   WALK_SPEED,
   RUN_SPEED,
@@ -48,6 +47,9 @@ class PlayerController {
      */
     this._state = 'idle';
 
+    /** Whether the controller processes input. Managed by ModeController. */
+    this._enabled = true;
+
     // --- Reusable direction vectors (avoid per-frame allocation) ---
     /** @private */ this._forward = new Vector3();
     /** @private */ this._right = new Vector3();
@@ -77,6 +79,10 @@ class PlayerController {
     this._cameraYaw = yaw;
   }
 
+  setEnabled(enabled) {
+    this._enabled = enabled;
+  }
+
   /** World position of the character container. */
   get position() {
     return this._body.container.position;
@@ -100,8 +106,7 @@ class PlayerController {
    * @param {number} delta - Seconds since last frame
    */
   update(delta) {
-    // Only move the player when the game is in 'play' mode
-    if (GameState.mode !== 'play') return;
+    if (!this._enabled) return;
 
     const input = this._input;
 
@@ -188,9 +193,12 @@ class PlayerController {
     // --- State transition: trigger animation + event ---
     if (newState !== this._state) {
       this._state = newState;
-      this._body.playAction(newState);
       EventBus.emit('player:stateChanged', { state: newState });
     }
+
+    // Speed-based animation blending
+    const horizontalSpeed = Math.sqrt(this._velocity.x ** 2 + this._velocity.z ** 2);
+    this._body.setAnimBySpeed(horizontalSpeed);
 
     // --- Advance animation mixer ---
     this._body.update(delta);

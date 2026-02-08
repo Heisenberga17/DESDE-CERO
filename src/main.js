@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import Engine from './core/Engine.js';
 import EventBus from './core/EventBus.js';
 import GameState from './core/GameState.js';
+import ModeController from './core/ModeController.js';
 import SkySystem from './world/SkySystem.js';
 import TerrainGenerator from './world/TerrainGenerator.js';
 
@@ -33,12 +34,13 @@ import VideoExport from './director/VideoExport.js';
 // Animation
 import AnimationManager from './animation/AnimationManager.js';
 
+// Loaders
+import AvaturnLoader from './loaders/AvaturnLoader.js';
+import ModelLoader from './loaders/ModelLoader.js';
+
 // UI
 import ModelBrowser from './ui/ModelBrowser.js';
 import HUD from './ui/HUD.js';
-
-// Loaders
-import ModelLoader from './loaders/ModelLoader.js';
 
 // Utils
 import { createStats } from './utils/debug.js';
@@ -57,27 +59,12 @@ const terrain = new TerrainGenerator(engine.scene); // fallback ground
 
 const cameraSystem = new CameraSystem(engine.camera, engine.input);
 
-// Register drone camera (default)
-const drone = new CameraDrone();
-cameraSystem.registerMode(drone);
-
-// Register driving camera
-const drivingCam = new DrivingCam();
-cameraSystem.registerMode(drivingCam);
-
-// Register orbit camera
-const orbitCam = new OrbitCam();
-cameraSystem.registerMode(orbitCam);
-
-// Register cinematic camera
-const cinematicCam = new CinematicCam();
-cameraSystem.registerMode(cinematicCam);
-
-// Register path camera
-const pathCam = new PathCam();
-cameraSystem.registerMode(pathCam);
-
-// Start with drone
+// Register camera modes
+cameraSystem.registerMode(new CameraDrone());
+cameraSystem.registerMode(new DrivingCam());
+cameraSystem.registerMode(new OrbitCam());
+cameraSystem.registerMode(new CinematicCam());
+cameraSystem.registerMode(new PathCam());
 cameraSystem.setMode('drone');
 engine.addUpdatable(cameraSystem);
 
@@ -85,6 +72,32 @@ engine.addUpdatable(cameraSystem);
 
 const postProcessing = new PostProcessing(engine.renderer, engine.scene, engine.camera);
 engine.setPostProcessing(postProcessing);
+
+// ── Director Mode ────────────────────────────────────────────────────
+
+const director = new DirectorMode(cameraSystem, engine.input);
+
+// ── Mode Controller (replaces scattered event listeners) ─────────────
+
+const modeController = new ModeController({
+  cameraSystem,
+  playerController: null,
+  vehicleInteraction: null,
+  director,
+});
+engine.addUpdatable(modeController);
+
+// Director is updated by ModeController now, so don't add it separately
+
+// ── Video Export ─────────────────────────────────────────────────────
+
+const videoExport = new VideoExport(canvas);
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyR' && GameState.mode === 'director') {
+    videoExport.toggle();
+  }
+});
 
 // ── UI ───────────────────────────────────────────────────────────────
 
@@ -117,38 +130,7 @@ document.addEventListener('pointerlockchange', () => {
   if (clickPrompt) clickPrompt.classList.toggle('hidden', locked);
 });
 
-// ── Director Mode ────────────────────────────────────────────────────
-
-const director = new DirectorMode(cameraSystem, engine.input);
-engine.addUpdatable(director);
-
-// ── Video Export ─────────────────────────────────────────────────────
-
-const videoExport = new VideoExport(canvas);
-
-// R key to toggle recording
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyR' && GameState.mode === 'director') {
-    videoExport.toggle();
-  }
-});
-
-// ── Camera mode switching based on game state ────────────────────────
-
-EventBus.on('gamestate:modeChanged', ({ mode }) => {
-  if (mode === 'drive') {
-    cameraSystem.setMode('driving');
-  } else if (mode === 'play') {
-    cameraSystem.setMode('thirdperson');
-  } else if (mode === 'free' || mode === 'director') {
-    cameraSystem.setMode('drone');
-  }
-});
-
 // ── Asset Loading + Full Game Setup ──────────────────────────────────
-
-let playerController = null;
-let vehicleInteraction = null;
 
 async function loadAssets() {
   const setStatus = (msg) => {
@@ -191,39 +173,47 @@ async function loadAssets() {
 
     const vehicles = [mcqueen, cal, guido];
 
-    // Load avatar
+    // Load avatar via AvaturnLoader
     setStatus('Loading avatar...');
-    const avatarData = await ModelLoader.load('assets/models/characters/model.glb');
+    const avatarResult = await AvaturnLoader.load('assets/models/characters/model.glb');
+    AvaturnLoader.configureShadows(avatarResult.mesh);
+
+    console.log('[Assets] Avatar bones:', avatarResult.bones.length);
+    console.log('[Assets] Avatar morph targets:', AvaturnLoader.getMorphTargetNames(avatarResult.mesh));
 
     // Set up player character
-    const body = new CharacterBody(avatarData.scene, avatarData.animations);
+    const body = new CharacterBody(avatarResult.mesh, avatarResult.animations);
     body.container.position.set(0, 0, 15);
     engine.scene.add(body.container);
 
-    playerController = new PlayerController(body, engine.input);
-    engine.addUpdatable(playerController);
+    // Preload Mixamo animations (auto-retargets to Avaturn skeleton)
+    setStatus('Loading animations...');
+    const animResults = await AnimationManager.preloadDefaultClips();
+    const loadedAnims = animResults.filter(r => r.ok).map(r => r.name);
+    console.log('[Assets] Animations loaded:', loadedAnims.join(', ') || 'none');
+
+    // Register animations into state machine
+    body.registerAnimations();
+
+    // Player controller (updated by ModeController, not engine directly)
+    const playerController = new PlayerController(body, engine.input);
     GameState.player = playerController;
 
     // Register third-person camera (needs player reference)
     const tpCam = new ThirdPersonCam(playerController);
     cameraSystem.registerMode(tpCam);
 
-    // Vehicle interaction system
-    vehicleInteraction = new VehicleInteraction(playerController, vehicles, engine.input);
-    engine.addUpdatable(vehicleInteraction);
+    // Vehicle interaction system (updated by ModeController, not engine directly)
+    const vehicleInteraction = new VehicleInteraction(playerController, vehicles, engine.input);
 
-    // Load walking animation if available
-    try {
-      await AnimationManager.loadClip('walk', 'assets/animations/Walking.fbx');
-      console.log('[Assets] Walking animation loaded');
-    } catch (e) {
-      console.warn('[Assets] Could not load Walking.fbx:', e.message);
-    }
+    // Wire into ModeController
+    modeController.setPlayerController(playerController);
+    modeController.setVehicleInteraction(vehicleInteraction);
 
     setStatus('All assets loaded! Press P to play');
-    console.log('[Assets] All loaded — city, 3 vehicles, avatar');
+    console.log('[Assets] All loaded — city, 3 vehicles, avatar, animations');
 
-    // Start in free camera mode (drone) — press P to switch to play
+    // Start in free camera mode
     GameState.setMode('free');
 
   } catch (err) {
@@ -236,7 +226,7 @@ async function loadAssets() {
 window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyP' && GameState.mode !== 'director') {
     if (GameState.mode === 'free') {
-      if (playerController) {
+      if (GameState.player) {
         GameState.setMode('play');
       }
     } else if (GameState.mode === 'play') {

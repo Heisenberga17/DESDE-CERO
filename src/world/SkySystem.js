@@ -24,26 +24,26 @@ class SkySystem {
     // Directional light (sun)
     this._sunLight = new THREE.DirectionalLight(0xfff4e0, 3.0);
     this._sunLight.castShadow = true;
-    this._sunLight.shadow.mapSize.width = 4096;
-    this._sunLight.shadow.mapSize.height = 4096;
+    this._sunLight.shadow.mapSize.width = 2048;
+    this._sunLight.shadow.mapSize.height = 2048;
     this._sunLight.shadow.camera.near = 0.5;
     this._sunLight.shadow.camera.far = 500;
-    this._sunLight.shadow.camera.left = -200;
-    this._sunLight.shadow.camera.right = 200;
-    this._sunLight.shadow.camera.top = 200;
-    this._sunLight.shadow.camera.bottom = -200;
+    this._sunLight.shadow.camera.left = -150;
+    this._sunLight.shadow.camera.right = 150;
+    this._sunLight.shadow.camera.top = 150;
+    this._sunLight.shadow.camera.bottom = -150;
     this._sunLight.shadow.bias = -0.0005;
     this._sunLight.shadow.normalBias = 0.02;
     scene.add(this._sunLight);
     scene.add(this._sunLight.target);
 
     // Hemisphere light (ambient fill)
-    this._hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x362907, 0.4);
+    this._hemiLight = new THREE.HemisphereLight(0x87ceeb, 0x8B7355, 0.7);
     scene.add(this._hemiLight);
 
     // Fog
     this._fogColor = new THREE.Color(0xffd89b);
-    scene.fog = new THREE.Fog(this._fogColor, 100, 800);
+    scene.fog = new THREE.Fog(this._fogColor, 200, 1200);
 
     // Default to golden hour (~17:30)
     this.setTimeOfDay(17.5);
@@ -94,7 +94,7 @@ class SkySystem {
     this._scene.fog.color.copy(this._fogColor);
 
     // Hemisphere light adjustments
-    this._hemiLight.intensity = THREE.MathUtils.lerp(0.2, 0.5, normalizedElevation);
+    this._hemiLight.intensity = THREE.MathUtils.lerp(0.4, 0.8, normalizedElevation);
   }
 
   getSunDirection() {

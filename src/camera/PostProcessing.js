@@ -3,7 +3,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
-import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+import { SAOPass } from 'three/addons/postprocessing/SAOPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import EventBus from '../core/EventBus.js';
 
 /**
@@ -11,9 +13,11 @@ import EventBus from '../core/EventBus.js';
  *
  * Manages an EffectComposer pipeline with the following passes:
  *   1. RenderPass   — standard scene render
- *   2. UnrealBloom  — soft glow / bloom effect
- *   3. Vignette     — darkened edges (custom shader)
- *   4. FXAA         — fast anti-aliasing
+ *   2. SAOPass      — scalable ambient occlusion
+ *   3. UnrealBloom  — soft glow / bloom effect
+ *   4. Vignette     — darkened edges (custom shader)
+ *   5. SMAAPass     — subpixel morphological anti-aliasing
+ *   6. OutputPass   — tone-mapping / colour-space output
  *
  * Toggle all effects on/off with the G key.
  *
@@ -48,7 +52,17 @@ class PostProcessing {
     this._renderPass = new RenderPass(scene, camera);
     this._composer.addPass(this._renderPass);
 
-    // --- Pass 2: Unreal Bloom ---
+    // --- Pass 2: SAO (Scalable Ambient Occlusion) ---
+    /** @private */
+    this._sao = new SAOPass(scene, camera);
+    this._sao.params.saoBias = 0.5;
+    this._sao.params.saoIntensity = 0.02;
+    this._sao.params.saoScale = 4;
+    this._sao.params.saoKernelRadius = 30;
+    this._sao.params.saoMinResolution = 0;
+    this._composer.addPass(this._sao);
+
+    // --- Pass 3: Unreal Bloom ---
     /** @private */
     this._bloom = new UnrealBloomPass(
       new THREE.Vector2(window.innerWidth, window.innerHeight),
@@ -58,13 +72,13 @@ class PostProcessing {
     );
     this._composer.addPass(this._bloom);
 
-    // --- Pass 3: Vignette (custom shader) ---
+    // --- Pass 4: Vignette (custom shader) ---
     /** @private */
     this._vignette = new ShaderPass({
       uniforms: {
         tDiffuse:  { value: null },
         offset:    { value: 1.0 },
-        darkness:  { value: 1.2 },
+        darkness:  { value: 0.8 },
       },
       vertexShader: /* glsl */ `
         varying vec2 vUv;
@@ -90,14 +104,15 @@ class PostProcessing {
     });
     this._composer.addPass(this._vignette);
 
-    // --- Pass 4: FXAA anti-aliasing ---
+    // --- Pass 5: SMAA anti-aliasing ---
     /** @private */
-    this._fxaa = new ShaderPass(FXAAShader);
-    this._fxaa.uniforms['resolution'].value.set(
-      1 / window.innerWidth,
-      1 / window.innerHeight
-    );
-    this._composer.addPass(this._fxaa);
+    this._smaa = new SMAAPass(window.innerWidth, window.innerHeight);
+    this._composer.addPass(this._smaa);
+
+    // --- Pass 6: Output (tone-mapping / colour-space) ---
+    /** @private */
+    this._output = new OutputPass();
+    this._composer.addPass(this._output);
 
     // --- G key toggle ---
     /** @private */
@@ -115,7 +130,7 @@ class PostProcessing {
       const w = window.innerWidth;
       const h = window.innerHeight;
       this._composer.setSize(w, h);
-      this._fxaa.uniforms['resolution'].value.set(1 / w, 1 / h);
+      this._smaa.setSize(w, h);
     };
     window.addEventListener('resize', this._onResize);
   }
@@ -186,6 +201,22 @@ class PostProcessing {
    */
   setVignetteOffset(v) {
     this._vignette.uniforms.offset.value = v;
+  }
+
+  /**
+   * Set SAO intensity.
+   * @param {number} v
+   */
+  setSAOIntensity(v) {
+    this._sao.params.saoIntensity = v;
+  }
+
+  /**
+   * Set SAO scale.
+   * @param {number} v
+   */
+  setSAOScale(v) {
+    this._sao.params.saoScale = v;
   }
 
   // ---------------------------------------------------------------------------

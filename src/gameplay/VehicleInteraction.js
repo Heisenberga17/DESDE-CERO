@@ -39,6 +39,9 @@ class VehicleInteraction {
     // Reusable scratch vector for exit offset calculation
     this._exitOffset = new Vector3();
 
+    /** Current operating mode: 'play' or 'drive'. Set by ModeController. */
+    this._mode = 'play';
+
     this._createPrompt();
   }
 
@@ -79,21 +82,25 @@ class VehicleInteraction {
     this._vehicles.push(vehicle);
   }
 
+  setMode(mode) {
+    this._mode = mode;
+  }
+
   /**
    * Per-frame update. Must be called from the main game loop.
    * Handles proximity detection, prompt visibility and enter/exit logic
-   * depending on the current GameState mode.
+   * depending on the current mode (set externally by ModeController).
    *
    * @param {number} delta — Frame time in seconds
    */
   update(delta) {
-    // ── F key edge detection ────────────────────────────────────────
+    // F key edge detection
     const fDown = this._input.isKeyDown('KeyF');
     const fJustPressed = fDown && !this._fPressed;
     this._fPressed = fDown;
 
-    // ── "play" mode: proximity check + enter ────────────────────────
-    if (GameState.mode === 'play') {
+    if (this._mode === 'play') {
+      // Proximity check for nearby vehicles
       this._nearestVehicle = null;
       let minDist = VEHICLE_ENTER_DISTANCE;
       const playerPos = this._player.position;
@@ -106,18 +113,14 @@ class VehicleInteraction {
         }
       }
 
-      // Show prompt only when a vehicle is in range
       this._promptEl.style.display = this._nearestVehicle ? 'block' : 'none';
 
       if (fJustPressed && this._nearestVehicle) {
         this._enterVehicle(this._nearestVehicle);
       }
-
-    // ── "drive" mode: drive + exit ──────────────────────────────────
-    } else if (GameState.mode === 'drive') {
+    } else if (this._mode === 'drive') {
       this._promptEl.style.display = 'none';
 
-      // Delegate driving physics to the vehicle
       if (GameState.vehicle) {
         GameState.vehicle.drive(this._input, delta);
       }
@@ -125,8 +128,6 @@ class VehicleInteraction {
       if (fJustPressed) {
         this._exitVehicle();
       }
-
-    // ── Any other mode: ensure prompt is hidden ─────────────────────
     } else {
       this._promptEl.style.display = 'none';
     }
