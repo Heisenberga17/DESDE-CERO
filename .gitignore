@@ -1,0 +1,17 @@
+# Dependencies
+node_modules/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Large binary assets (loaded locally, not tracked in git)
+# Comment out lines below if you want to track them
+assets/models/**/*.glb
+assets/models/**/*.gltf
+assets/animations/**/*.fbx
+assets/models/**/textures/

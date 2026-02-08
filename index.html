@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DESDE CERO — Open World Sandbox</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <canvas id="scene-canvas"></canvas>
+
+  <!-- Crosshair (visible when pointer locked) -->
+  <div id="crosshair" class="crosshair"></div>
+
+  <!-- Click prompt -->
+  <div id="click-to-start" class="click-to-start">Click to start</div>
+
+  <!-- HUD Overlay -->
+  <div id="hud" class="hud-overlay">
+    <div class="hud-panel hud-bottom-left">
+      <div class="hud-row">
+        <span class="hud-label">Camera</span>
+        <span id="hud-camera-mode" class="hud-value">DRONE</span>
+      </div>
+      <div class="hud-row hud-controls">
+        WASD Move &middot; Shift Sprint &middot; Space Jump &middot; F Vehicle &middot; P Play/Free &middot; Tab Director &middot; G Post-FX &middot; M Models &middot; C Camera
+      </div>
+    </div>
+  </div>
+
+  <!-- Model Browser Panel -->
+  <div id="model-browser" class="model-browser hud-panel">
+    <h3>Load Model</h3>
+
+    <!-- Drop zone -->
+    <div id="model-drop-zone" class="drop-zone">
+      Drop .glb file here<br>or click to browse
+      <input type="file" id="model-file-input" accept=".glb,.gltf" style="display:none">
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- URL input -->
+    <div class="field-group">
+      <label>URL</label>
+      <input type="text" id="model-url-input" placeholder="https://...model.glb">
+    </div>
+
+    <!-- Type selector -->
+    <div class="field-group">
+      <label>Type</label>
+      <select id="model-type-select">
+        <option value="prop">Prop</option>
+        <option value="environment">Environment</option>
+        <option value="vehicle">Vehicle</option>
+        <option value="character">Character</option>
+      </select>
+    </div>
+
+    <!-- Scale slider -->
+    <div class="field-group">
+      <label>Scale</label>
+      <div class="scale-row">
+        <input type="range" id="model-scale-input" min="0.01" max="10" step="0.01" value="1">
+        <span id="model-scale-value" class="scale-val">1</span>
+      </div>
+    </div>
+
+    <!-- Load button -->
+    <button id="model-load-btn" class="btn">Load from URL</button>
+
+    <!-- Status -->
+    <div id="model-status" class="status-text"></div>
+
+    <div class="hint">Press M to close</div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
